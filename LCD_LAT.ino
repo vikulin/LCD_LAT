@@ -50,8 +50,8 @@ DallasTemperature sensor(&oneWire);
 #define FIRST_LINE 0 //text position for first line
 #define SECOND_LINE 1 //text position for second line
 
-#define PIN_LIGHT_LINE 7
-#define PIN_HEATER_LINE 8
+#define PIN_LIGHT_LINE 11
+#define PIN_HEATER_LINE 12
 
 byte hrsLightStart=9;
 byte minsLightStart=9;
@@ -173,7 +173,7 @@ PADMENU(timeMenu,"",doNothing,noEvent,noStyle
 );
 
 PADMENU(dateMenu,"",doNothing,noEvent,noStyle
-  ,FIELD(clockYear,"YY","",19,99,1,0,saveDate,exitEvent,noStyle)
+  ,FIELD(clockYear,"Y","",19,99,1,0,saveDate,exitEvent,noStyle)
   ,FIELD(clockMonth,"M","",1,12,1,0,saveDate,exitEvent,noStyle)
   ,FIELD(clockDay,"D","",1,31,1,0,saveDate,exitEvent,noStyle)
 );
@@ -241,11 +241,21 @@ void setup() {
   sensor.begin();
   // устанавливаем разрешение датчика от 9 до 12 бит
   sensor.setResolution(12);
+  //non-blocking read
+  sensor.setWaitForConversion(false);
 }
 
 #define SOFT_DEBOUNCE_MS 100
 
+int loopCounter = 0;
+
 void loop() {
+  
+  loopCounter++;
+  
+  // переменная для хранения температуры
+  float temperature;
+
 
   if (RTC.read(tm)) {
     if(previous_ss != tm.Second) { //if current seconds diff. from previous seconds
@@ -260,22 +270,24 @@ void loop() {
       }   
     }
   }
-
-  // переменная для хранения температуры
-  float temperature;
-  // отправляем запрос на измерение температуры
-  sensor.requestTemperatures();
-  // считываем данные из регистра датчика
-  temperature = sensor.getTempCByIndex(0);
-  if(temperature<tempHeaterStart){
-    //turn on heater
-    digitalWrite(PIN_HEATER_LINE, LOW);
+  if(loopCounter % 1000 ==0){
+    // отправляем запрос на измерение температуры
+    sensor.requestTemperatures();
+    // считываем данные из регистра датчика
+    temperature = sensor.getTempCByIndex(0);
+    if(temperature<tempHeaterStart){
+      //turn on heater
+      digitalWrite(PIN_HEATER_LINE, LOW);
+    }
+    if(temperature>tempHeaterStop){
+      //turn off heater
+      digitalWrite(PIN_HEATER_LINE, HIGH);
+    }
+    loopCounter=0;
   }
-  if(temperature>tempHeaterStop){
-    //turn off heater
-    digitalWrite(PIN_HEATER_LINE, HIGH);
-  }
+  
   byte lcd_key = key_press();   // read the buttons
+  
   switch (lcd_key) {
     case btnRIGHT:
       nav.doNav(rightCmd);
@@ -332,7 +344,7 @@ void loop() {
             lcd.setCursor(0, SECOND_LINE);
             lcd.print("Check circuitry");
           }
-          delay(1000);
+          delay(500);
           lcd.clear();
         }
       }
