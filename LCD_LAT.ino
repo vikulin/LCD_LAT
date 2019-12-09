@@ -23,7 +23,6 @@ on this example only using
 #include <EEPROM.h>
 #include "DS1307RTC.h"
 #include <OneWire.h>
-#include <DallasTemperature.h>
 
 using namespace Menu;
 
@@ -34,10 +33,7 @@ LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 
 // сигнальный провод датчика
 #define ONE_WIRE_BUS 2
-OneWire  oneWire(ONE_WIRE_BUS);
-
-// создадим объект для работы с библиотекой DallasTemperature
-DallasTemperature sensor(&oneWire);
+OneWire  ds(ONE_WIRE_BUS);
 
 // define some values used by the panel and buttons
 #define btnNONE   0
@@ -238,43 +234,31 @@ void setup() {
   digitalWrite(PIN_LIGHT_LINE, HIGH);
   digitalWrite(PIN_HEATER_LINE, HIGH);
 
-  sensor.begin();
-  // устанавливаем разрешение датчика от 9 до 12 бит
-  sensor.setResolution(12);
-  //non-blocking read
-  sensor.setWaitForConversion(false);
 }
 
 #define SOFT_DEBOUNCE_MS 100
 
-int loopCounter = 0;
-
-void loop() {
-  
-  loopCounter++;
-  
-  // переменная для хранения температуры
-  float temperature;
+int temperature = 0; // Глобальная переменная для хранения значение температуры с датчика DS18B20
+long lastUpdateTime = 0; // Переменная для хранения времени последнего считывания с датчика
+const int TEMP_UPDATE_TIME = 1000; // Определяем периодичность проверок
 
 
-  if (RTC.read(tm)) {
-    if(previous_ss != tm.Second) { //if current seconds diff. from previous seconds
-      previous_ss = tm.Second;
-      int minutes = tm.Minute+tm.Hour*60;
-      if(minutes>=minsLightStart + hrsLightStart*60 && minutes<=minsLightStop + hrsLightStop*60){
-        //turn on line
-        digitalWrite(PIN_LIGHT_LINE, LOW);
-      } else {
-        //turn off line
-        digitalWrite(PIN_LIGHT_LINE, HIGH);
-      }   
-    }
-  }
-  if(loopCounter % 1000 ==0){
-    // отправляем запрос на измерение температуры
-    sensor.requestTemperatures();
-    // считываем данные из регистра датчика
-    temperature = sensor.getTempCByIndex(0);
+int detectTemperature(){
+  byte data[2];
+  ds.reset();
+  ds.write(0xCC);
+  ds.write(0x44);
+  if (millis() - lastUpdateTime > TEMP_UPDATE_TIME)
+  {
+    lastUpdateTime = millis();
+    ds.reset();
+    ds.write(0xCC);
+    ds.write(0xBE);
+    data[0] = ds.read();
+    data[1] = ds.read();
+    // Формируем значение
+    temperature = (data[1] << 8) + data[0]; 
+    temperature = temperature >> 4;
     if(temperature<tempHeaterStart){
       //turn on heater
       digitalWrite(PIN_HEATER_LINE, LOW);
@@ -283,8 +267,22 @@ void loop() {
       //turn off heater
       digitalWrite(PIN_HEATER_LINE, HIGH);
     }
-    loopCounter=0;
+    if (RTC.read(tm)) {
+      int minutes = tm.Minute+tm.Hour*60;
+      if(minutes>=minsLightStart + hrsLightStart*60 && minutes<=minsLightStop + hrsLightStop*60){
+        //turn on line
+        digitalWrite(PIN_LIGHT_LINE, LOW);
+      } else {
+        //turn off line
+        digitalWrite(PIN_LIGHT_LINE, HIGH);
+      }
+    }
   }
+}
+
+void loop() {
+
+  detectTemperature();
   
   byte lcd_key = key_press();   // read the buttons
   
@@ -380,11 +378,12 @@ void show_date(byte pos_y) {
 //////////////////////////////////////////////////////////////////////////
 // show temperature
 //////////////////////////////////////////////////////////////////////////
-void show_temperature(byte pos_y, float temp) {
+void show_temperature(byte pos_y, int temp) {
   if(!isnan(temp)){
     lcd.setCursor(10, pos_y);
     lcd.print("T:");
     lcd.print(temp);
+    lcd.print("'C");
   }
 }
 
