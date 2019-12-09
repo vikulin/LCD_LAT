@@ -240,7 +240,7 @@ void setup() {
 
 int temperature = 0; // Глобальная переменная для хранения значение температуры с датчика DS18B20
 long lastUpdateTime = 0; // Переменная для хранения времени последнего считывания с датчика
-const int TEMP_UPDATE_TIME = 5000; // Определяем периодичность проверок
+const int TEMP_UPDATE_TIME = 1000; // Определяем периодичность проверок
 
 
 int detectTemperature(){
@@ -267,14 +267,7 @@ int detectTemperature(){
       //turn off heater
       digitalWrite(PIN_HEATER_LINE, HIGH);
     }
-  }
-}
-
-void loop() {
-  
-  if (RTC.read(tm)) {
-    if(previous_ss != tm.Second) { //if current seconds diff. from previous seconds
-      previous_ss = tm.Second;
+    if (RTC.read(tm)) {
       int minutes = tm.Minute+tm.Hour*60;
       if(minutes>=minsLightStart + hrsLightStart*60 && minutes<=minsLightStop + hrsLightStop*60){
         //turn on line
@@ -282,9 +275,12 @@ void loop() {
       } else {
         //turn off line
         digitalWrite(PIN_LIGHT_LINE, HIGH);
-      }   
+      }
     }
   }
+}
+
+void loop() {
 
   detectTemperature();
   
@@ -387,6 +383,7 @@ void show_temperature(byte pos_y, int temp) {
     lcd.setCursor(10, pos_y);
     lcd.print("T:");
     lcd.print(temp);
+    lcd.print("'C");
   }
 }
 
